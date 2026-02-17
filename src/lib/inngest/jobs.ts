@@ -7,6 +7,7 @@ import {
   topFollowers,
   hashtagAnalytics,
   syncJobs,
+  users,
 } from "@/lib/db/schema";
 import {
   getUserTwitterClient,
@@ -16,11 +17,26 @@ import {
   calculateEngagementScore,
   analyzeSentiment,
 } from "@/lib/twitter/client";
-import { eq, desc, and, gte } from "drizzle-orm";
+import { eq, desc, and, gte, sql, count } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import { subDays, subHours } from "date-fns";
+import {
+  sendFollowerMilestoneEmail,
+  sendViralTweetEmail,
+  sendNegativeSentimentAlertEmail,
+  sendWeeklyReportEmail,
+} from "@/lib/email";
 
 import { inngest } from "./client";
 export { inngest };
+
+// Re-export sync functions
+export {
+  syncTwitterAccount,
+  checkAlerts,
+  sendWeeklyReports,
+  scheduledSync,
+} from "./sync-jobs";
 
 // ─────────────────────────────────────────────
 // JOB: Sync User Tweets (runs hourly)
