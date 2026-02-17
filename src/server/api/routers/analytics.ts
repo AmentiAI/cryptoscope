@@ -1,3 +1,4 @@
+import { nanoid } from "nanoid";
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
 import { db } from "@/lib/db";
@@ -8,8 +9,9 @@ import {
   mentions,
   topFollowers,
   hashtagAnalytics,
+  competitors,
 } from "@/lib/db/schema";
-import { and, eq, gte, desc, sql } from "drizzle-orm";
+import { and, eq, gte, desc, sql, count } from "drizzle-orm";
 import { analyzeBestPostingTimes } from "@/lib/twitter/client";
 import { inngest } from "@/lib/inngest/jobs";
 import { subDays } from "date-fns";
@@ -305,6 +307,146 @@ export const analyticsRouter = createTRPCRouter({
       });
 
       return { success: true };
+    }),
+
+  // ─── Competitors ───────────────────────────────────────────────────────────
+  getCompetitors: protectedProcedure
+    .input(z.object({ accountId: z.string() }))
+    .query(async ({ input, ctx }) => {
+      await verifyAccountOwner(input.accountId, ctx.userId);
+      return db
+        .select()
+        .from(competitors)
+        .where(
+          and(eq(competitors.userId, input.accountId), eq(competitors.userId, ctx.userId))
+        )
+        .orderBy(desc(competitors.followerCount));
+    }),
+
+  addCompetitor: protectedProcedure
+    .input(
+      z.object({
+        accountId: z.string(),
+        twitterHandle: z.string().min(1),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      await verifyAccountOwner(input.accountId, ctx.userId);
+
+      // Check limit (free: 3, pro: 10, agency: unlimited)
+      const existingCount = await db
+        .select({ count: count() })
+        .from(competitors)
+        .where(and(eq(competitors.userId, input.accountId), eq(competitors.userId, ctx.userId)));
+
+      if ((existingCount[0]?.count ?? 0) >= 20) {
+        throw new Error("Competitor limit reached");
+      }
+
+      const [comp] = await db
+        .insert(competitors)
+        .values({
+          userId: ctx.userId,
+          username: input.twitterHandle.replace("@", ""),
+        })
+        .onConflictDoNothing()
+        .returning();
+
+      // Try to fetch public data
+      if (comp) {
+        try {
+          await inngest.send({
+            name: "competitor/sync.requested",
+            data: { competitorId: comp.id },
+          });
+        } catch {}
+      }
+
+      return comp;
+    }),
+
+  removeCompetitor: protectedProcedure
+    .input(z.object({ competitorId: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      await db
+        .delete(competitors)
+        .where(
+          and(eq(competitors.id, input.competitorId), eq(competitors.userId, ctx.userId))
+        );
+      return { success: true };
+    }),
+
+  refreshCompetitor: protectedProcedure
+    .input(z.object({ competitorId: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      const [comp] = await db
+        .select()
+        .from(competitors)
+        .where(
+          and(eq(competitors.id, input.competitorId), eq(competitors.userId, ctx.userId))
+        );
+
+      if (!comp) throw new Error("Competitor not found");
+
+      await inngest.send({
+        name: "competitor/sync.requested",
+        data: { competitorId: comp.id },
+      });
+
+      return { success: true };
+    }),
+
+  compareWithCompetitors: protectedProcedure
+    .input(z.object({ accountId: z.string() }))
+    .query(async ({ input, ctx }) => {
+      await verifyAccountOwner(input.accountId, ctx.userId);
+
+      const [myAccount] = await db
+        .select()
+        .from(twitterAccounts)
+        .where(eq(twitterAccounts.id, input.accountId));
+
+      const compList = await db
+        .select()
+        .from(competitors)
+        .where(
+          and(eq(competitors.userId, input.accountId), eq(competitors.userId, ctx.userId))
+        );
+
+      return {
+        myAccount,
+        competitors: compList,
+      };
+    }),
+
+  // ─── Hashtag performance with days param ──────────────────────────────────
+  getHashtagPerformanceDays: protectedProcedure
+    .input(
+      z.object({
+        accountId: z.string(),
+        days: z.number().default(30),
+      })
+    )
+    .query(async ({ input, ctx }) => {
+      await verifyAccountOwner(input.accountId, ctx.userId);
+      const since = subDays(new Date(), input.days);
+
+      return db
+        .select({
+          hashtag: hashtagAnalytics.hashtag,
+          useCount: sql<number>`sum(${hashtagAnalytics.tweetCount})`,
+          avgEngagement: sql<number>`avg(${hashtagAnalytics.avgEngagement})`,
+        })
+        .from(hashtagAnalytics)
+        .where(
+          and(
+            eq(hashtagAnalytics.accountId, input.accountId),
+            eq(hashtagAnalytics.period, input.days <= 7 ? "7d" : input.days <= 30 ? "30d" : "90d")
+          )
+        )
+        .groupBy(hashtagAnalytics.hashtag)
+        .orderBy(desc(sql`avg(${hashtagAnalytics.avgEngagement})`))
+        .limit(20);
     }),
 });
 
