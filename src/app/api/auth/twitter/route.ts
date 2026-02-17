@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth, currentUser } from "@clerk/nextjs";
+import { getAuth } from "@clerk/nextjs/server";
 import crypto from "crypto";
 
 /**
@@ -22,7 +22,7 @@ function generateCodeChallenge(verifier: string): string {
 
 export async function GET(req: NextRequest) {
   try {
-    const { userId } = auth();
+    const { userId } = getAuth(req);
     if (!userId) {
       return NextResponse.redirect(`${APP_URL}/sign-in`);
     }

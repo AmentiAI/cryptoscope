@@ -54,12 +54,7 @@ const TASK_COLORS: Record<string, string> = {
 
 export default function AgentsPage() {
   const [connectOpen, setConnectOpen] = useState(false)
-  const [newAgent, setNewAgent] = useState({
-    name: "",
-    moltbookApiKey: "",
-    platform: "moltbook" as const,
-    capabilities: [] as string[],
-  })
+  const [newAgent, setNewAgent] = useState({ name: "", moltbookApiKey: "" })
 
   const utils = api.useUtils()
 
@@ -70,9 +65,8 @@ export default function AgentsPage() {
   const connectAgent = api.agents.connectAgent.useMutation({
     onSuccess: () => {
       utils.agents.listAgents.invalidate()
-      utils.agents.getAgentStats.invalidate()
       setConnectOpen(false)
-      setNewAgent({ name: "", moltbookApiKey: "", platform: "moltbook", capabilities: [] })
+      setNewAgent({ name: "", moltbookApiKey: "" })
     },
   })
 
@@ -85,9 +79,7 @@ export default function AgentsPage() {
   })
 
   const runTask = api.agents.runTask.useMutation({
-    onSuccess: () => {
-      utils.agents.getRecentTasks.invalidate()
-    },
+    onSuccess: () => utils.agents.getRecentTasks.invalidate(),
   })
 
   return (
@@ -136,21 +128,6 @@ export default function AgentsPage() {
                     moltbook.com
                   </a>
                 </p>
-              </div>
-              <div className="space-y-1">
-                <Label>Platform</Label>
-                <Select
-                  value={newAgent.platform}
-                  onValueChange={(v: any) => setNewAgent((p) => ({ ...p, platform: v }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="moltbook">Moltbook</SelectItem>
-                    <SelectItem value="custom">Custom (API)</SelectItem>
-                  </SelectContent>
-                </Select>
               </div>
               <Button
                 className="w-full bg-orange-500 hover:bg-orange-600 text-white"
@@ -277,6 +254,10 @@ export default function AgentsPage() {
                         )}
                       </div>
                     </div>
+                  </CardContent>
+                </Card>
+              )
+            })
           )}
         </TabsContent>
 
@@ -355,13 +336,11 @@ export default function AgentsPage() {
                 Register and manage agents on Moltbook to unlock full automation
               </p>
             </div>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" asChild>
-                <a href="https://moltbook.com" target="_blank" rel="noreferrer">
-                  Open Moltbook
-                </a>
-              </Button>
-            </div>
+            <Button variant="outline" size="sm" asChild>
+              <a href="https://moltbook.com" target="_blank" rel="noreferrer">
+                Open Moltbook
+              </a>
+            </Button>
           </div>
         </CardContent>
       </Card>

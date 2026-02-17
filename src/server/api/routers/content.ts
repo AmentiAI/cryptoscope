@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { nanoid } from "nanoid";
 import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
 import { db } from "@/lib/db";
 import { tweets, twitterAccounts, agentTasks, agents } from "@/lib/db/schema";
@@ -163,11 +164,12 @@ export const contentRouter = createTRPCRouter({
       const [task] = await db
         .insert(agentTasks)
         .values({
+          id: nanoid(),
           userId: ctx.userId,
-          agentId,
+          agentId: agentId!,
           type: "post_tweet",
           status: "queued",
-          payload: {
+          input: {
             accountId: input.accountId,
             text: input.text,
             isThread: input.isThread,

@@ -343,11 +343,14 @@ export const analyticsRouter = createTRPCRouter({
         throw new Error("Competitor limit reached");
       }
 
+      const username = input.twitterHandle.replace("@", "");
       const [comp] = await db
         .insert(competitors)
         .values({
+          id: nanoid(),
           userId: ctx.userId,
-          username: input.twitterHandle.replace("@", ""),
+          twitterId: username, // Placeholder, will be updated on sync
+          username,
         })
         .onConflictDoNothing()
         .returning();

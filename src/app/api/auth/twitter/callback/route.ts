@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs";
+import { getAuth } from "@clerk/nextjs/server";
 import { db } from "@/lib/db";
 import { twitterAccounts } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
@@ -16,7 +16,7 @@ const CALLBACK_URL = `${APP_URL}/api/auth/twitter/callback`;
  */
 export async function GET(req: NextRequest) {
   try {
-    const { userId } = auth();
+    const { userId } = getAuth(req);
     if (!userId) {
       return NextResponse.redirect(`${APP_URL}/sign-in`);
     }
